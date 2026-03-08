@@ -1,0 +1,6 @@
+[submodule "sglang"]
+	path = sglang
+	url = https://github.com/gerayking/sglang-com.git
+[submodule "SOAR-Toolkit"]
+	path = SOAR-Toolkit
+	url = https://github.com/OpenBMB/SOAR-Toolkit.git
