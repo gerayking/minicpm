@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# SOAR 2026 环境构建脚本（必选）
-# 平台会在基础环境启动后 source 本脚本，请使用 uv pip install 安装依赖。
-# 参考：https://github.com/OpenBMB/SOAR-Toolkit 提交 Demo
-set -e
+set -euo pipefail
 
-# 示例：不修改镜像内 sglang 时，仅追加推理参数（可选）
-# export SGLANG_SERVER_ARGS="${SGLANG_SERVER_ARGS:-} --log-level info"
+echo "[prepare_env] start $(date '+%F %T')"
 
-# 示例：安装额外 Python 包
-# uv pip install xxx
+# ---- patch minicpm_backend hardcoded bfloat16 -> float16 for GPTQ compat ----
+BACKEND_DIR=/opt/SGLang-MiniCPM-SALA/packages/sglang-minicpm/python/sglang/srt/layers/attention
 
-# 示例：用自备 sglang 替换镜像内置版本（editable）
-# uv pip install --no-deps -e ./sglang/python
-# export SGLANG_SERVER_ARGS="${SGLANG_SERVER_ARGS:-} --log-level info"
+for pyfile in "$BACKEND_DIR"/minicpm_backend.py "$BACKEND_DIR"/minicpm_sparse_utils.py; do
+    if [ -f "$pyfile" ]; then
+        sed -i 's/torch\.bfloat16/torch.float16/g'  "$pyfile"
+        sed -i 's/"bfloat16"/"float16"/g'            "$pyfile"
+        echo "[prepare_env] patched $(basename "$pyfile")"
+    fi
+done
+find "$BACKEND_DIR/__pycache__" -name "minicpm_backend*" -o -name "minicpm_sparse_utils*" 2>/dev/null | xargs rm -f
 
-echo "[prepare_env.sh] 执行完毕"
+# ---- override SGLang launch args for GPTQ ----
+export SGLANG_SERVER_ARGS="--disable-radix-cache --attention-backend minicpm_flashinfer --chunked-prefill-size 8192 --skip-server-warmup --dense-as-sparse --quantization gptq --dtype float16 --disable-cuda-graph"
+
+echo "[prepare_env] SGLANG_SERVER_ARGS=${SGLANG_SERVER_ARGS}"
+echo "[prepare_env] done"
